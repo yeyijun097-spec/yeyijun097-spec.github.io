@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>敏感词批量处理 · 客满运营台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/workbench.css?v=20260729-2">
+</head>
+<body>
+  <div class="workbench">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-symbol">KM</div>
+        <div class="brand-copy"><strong>客满运营台</strong><span>OPERATIONS CONSOLE</span></div>
+      </div>
+      <nav class="sidebar-nav" aria-label="主菜单">
+        <a class="sidebar-link" href="/"><i class="fa fa-search"></i><span>用户信息查询</span></a>
+        <a class="sidebar-link" href="/photo-complaints"><i class="fa fa-camera"></i><span>图片录单</span></a>
+        <a class="sidebar-link active" href="/pipeline" aria-current="page"><i class="fa fa-tasks"></i><span>敏感词批量处理</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <a id="pipeline-admin-link" class="account-admin-link hidden" href="/admin"><i class="fa fa-users"></i><span>账号管理 / 新建账号</span></a>
+        <div class="account-row">
+          <div class="account-avatar">管</div>
+          <div class="account-copy"><strong id="pipeline-user-name">当前账号</strong><span>系统管理员</span></div>
+          <button id="pipelineLogout" class="logout-button" title="退出登录" aria-label="退出登录"><i class="fa fa-sign-out"></i></button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div><h1 class="page-title">敏感词批量处理</h1><p class="page-subtitle">上传 Excel，设置识别范围并将结果同步写回工作簿</p></div>
+        <div class="query-status-stack">
+          <span class="online-pill">工作流服务在线</span>
+          <span id="pipeline-backend-status" class="backend-status backend-status-red" role="status" aria-live="polite"><i class="status-light"></i><span>后台未登录</span></span>
+        </div>
+      </header>
+
+      <div class="content-shell">
+        <section class="panel">
+          <div class="panel-heading">
+            <div><h2>识别文件</h2><p>拖拽上传新的 Excel，或选择服务器最近生成的汇总文件。</p></div>
+            <span class="text-xs text-slate-500">仅支持 .xlsx · 最大 64MB</span>
+          </div>
+          <div class="panel-body">
+            <div id="dropZone" tabindex="0" class="upload-zone">
+              <div>
+                <div class="upload-icon"><i class="fa fa-cloud-upload"></i></div>
+                <h3 class="mt-3 text-base font-semibold">拖拽 Excel 文件到这里</h3>
+                <p class="mt-1 text-xs text-slate-500">上传后自动校验文件格式，并作为本次识别输入</p>
+                <input id="fileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
+                <button id="chooseFile" type="button" class="btn btn-secondary mt-4"><i class="fa fa-folder-open-o"></i>选择文件</button>
+              </div>
+            </div>
+            <div id="fileState" class="mt-3 hidden rounded-md border p-3 text-sm"></div>
+            <label class="mt-5 block"><span class="field-label">可用文件</span><select id="workbookName" class="field-control"><option value="">正在读取可用文件...</option></select></label>
+            <p class="hint-line">如果前面已完成关键词下载汇总，将默认选中最新生成的合并文件。</p>
+          </div>
+        </section>
+
+        <section class="panel mt-5">
+          <div class="panel-heading">
+            <div><h2>执行设置</h2><p>默认处理昨天的数据，从第 3 行开始识别。</p></div>
+            <span id="status" class="text-xs text-slate-500">等待上传文件</span>
+          </div>
+          <div class="panel-body">
+            <label class="block mb-5"><span class="field-label">处理模式</span><select id="pipelineMode" class="field-control"><option value="full">一键全流程：下载、合并并识别</option><option value="download">仅下载关键词汇总</option><option value="recognize">指定 Excel 识别并写回</option></select></label>
+            <p id="workflowHint" class="hint-line mb-4">一键下载 12 个关键词、按用户 ID 合并去重，再执行拟人工识别。</p>
+            <div class="settings-grid">
+              <label><span class="field-label">数据日期</span><input id="date" class="field-control font-mono"></label>
+              <label><span class="field-label">起始行</span><input id="fromRow" type="number" min="1" value="3" class="field-control font-mono"></label>
+              <label><span class="field-label">结束行（可空）</span><input id="toRow" type="number" min="1" placeholder="处理到最后一行" class="field-control font-mono"></label>
+            </div>
+            <div class="checkbox-row">
+              <label><input id="inPlace" type="checkbox" checked>直接写回上传文件</label>
+              <label><input id="debug" type="checkbox">调试模式</label>
+            </div>
+            <div class="task-actions-row">
+              <div class="task-actions">
+                <button id="start" type="button" class="btn btn-primary"><i class="fa fa-play"></i>一键下载、合并并识别</button>
+                <button id="continueLogin" type="button" class="btn btn-warning hidden"><i class="fa fa-check"></i>我已完成登录，继续</button>
+                <button id="cancelJob" type="button" class="btn btn-danger hidden bg-red-600 text-white hover:bg-red-700"><i class="fa fa-stop-circle"></i>终止任务</button>
+              </div>
+              <div id="rowProgress" class="row-progress" aria-live="polite" aria-label="识别任务进度">
+                <div class="row-progress-current"><span>当前识别行</span><strong>第 <b id="currentProgressRow">--</b> 行</strong></div>
+                <div class="row-progress-group">
+                  <strong><i class="fa fa-comments-o"></i>上下文</strong>
+                  <span data-progress-area="context" data-progress-state="pending">待查看</span>
+                  <span data-progress-area="context" data-progress-state="viewed">已查看</span>
+                  <span data-progress-area="context" data-progress-state="summarized">已总结</span>
+                </div>
+                <div class="row-progress-group">
+                  <strong><i class="fa fa-list-alt"></i>订单信息</strong>
+                  <span data-progress-area="order" data-progress-state="pending">待查看</span>
+                  <span data-progress-area="order" data-progress-state="viewed">已查看</span>
+                  <span data-progress-area="order" data-progress-state="summarized">已总结</span>
+                </div>
+              </div>
+            </div>
+            <div id="pipelineLoginPanel" class="mt-5 hidden rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <strong class="text-sm text-amber-900"><i class="fa fa-qrcode mr-2"></i>企聊宝登录验证</strong>
+                <span id="pipelineLoginHint" class="text-xs text-amber-700">登录画面会自动刷新</span>
+              </div>
+              <p class="mt-2 text-xs leading-6 text-amber-800">请使用企业微信扫描下方二维码。手机端确认登录后，点击“我已完成登录，继续”。</p>
+              <div class="mt-3 overflow-auto rounded-md border border-amber-200 bg-white p-2">
+                <img id="pipelineLoginScreenshot" class="mx-auto hidden max-h-[560px] max-w-full object-contain" hidden alt="企聊宝扫码登录页面">
+              </div>
+            </div>
+            <div id="result" class="mt-4 hidden rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"></div>
+          </div>
+        </section>
+
+        <section class="panel log-panel mt-5">
+          <div class="log-toolbar"><div><i class="fa fa-terminal mr-2"></i><span class="text-sm font-semibold">执行日志</span></div><button id="clearLog" type="button" class="border-0 bg-transparent text-xs text-slate-300 hover:text-white">清空</button></div>
+          <pre id="log" class="log-body">等待任务...</pre>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let csrfToken = "";
+    let jobId = "";
+    let pollTimer = null;
+    let cancellingJob = false;
+    const TERMINAL_JOB_STATUSES = new Set(["completed", "partial", "succeeded", "failed", "cancelled"]);
+    const SUCCESS_JOB_STATUSES = new Set(["completed", "partial", "succeeded"]);
+    const $ = (selector) => document.querySelector(selector);
+    const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`; };
+
+    init();
+    $("#date").value = yesterday();
+    $("#chooseFile").addEventListener("click", () => $("#fileInput").click());
+    $("#dropZone").addEventListener("click", (event) => { if (event.target !== $("#chooseFile")) $("#fileInput").click(); });
+    $("#dropZone").addEventListener("dragover", (event) => { event.preventDefault(); $("#dropZone").classList.add("ring-2", "ring-teal-500"); });
+    $("#dropZone").addEventListener("dragleave", () => $("#dropZone").classList.remove("ring-2", "ring-teal-500"));
+    $("#dropZone").addEventListener("drop", (event) => { event.preventDefault(); $("#dropZone").classList.remove("ring-2", "ring-teal-500"); const file = event.dataTransfer.files[0]; if (file) uploadFile(file); });
+    $("#fileInput").addEventListener("change", (event) => { const file = event.target.files[0]; if (file) uploadFile(file); });
+    $("#start").addEventListener("click", startRecognition);
+    $("#pipelineMode").addEventListener("change", updateModeUI);
+    $("#continueLogin").addEventListener("click", continueLogin);
+    $("#cancelJob").addEventListener("click", cancelCurrentJob);
+    $("#clearLog").addEventListener("click", () => { $("#log").textContent = ""; });
+    $("#pipelineLogout").addEventListener("click", async () => { try { await api("/api/logout", { method: "POST", body: "{}" }); } finally { location.href = "/login"; } });
+
+    async function init() {
+      const sessionResponse = await fetch("/api/session", { cache: "no-store" });
+      if (sessionResponse.status === 401) return window.location.replace("/login");
+      const session = await sessionResponse.json();
+      csrfToken = session.csrfToken || "";
+      $("#pipeline-user-name").textContent = session.user?.username || "当前账号";
+      if (session.user?.role === "admin") $("#pipeline-admin-link").classList.remove("hidden");
+      setPipelineBackendStatus("yellow", "等待后台验证");
+      updateModeUI();
+      await loadWorkbooks();
+      await restoreActiveJob();
+    }
+
+    async function loadWorkbooks(selected = "") {
+      const response = await fetch("/api/pipeline/workbooks", { cache: "no-store" });
+      if (!response.ok) return setStatus("无法读取服务器文件", true);
+      const payload = await response.json();
+      const select = $("#workbookName");
+      select.innerHTML = payload.data?.length ? payload.data.map((item) => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}（${formatBytes(item.size)}）</option>`).join("") : "<option value=\"\">请先上传文件</option>";
+      if (selected) select.value = selected;
+      setStatus(select.value ? "文件已就绪，可以开始识别" : "等待上传文件");
+    }
+
+    async function uploadFile(file) {
+      if (!/\.xlsx$/i.test(file.name)) return setStatus("只支持 .xlsx 文件", true);
+      if (file.size > 64 * 1024 * 1024) return setStatus("文件不能超过 64MB", true);
+      setStatus(`正在上传：${file.name}`); setBusy(true);
+      try {
+        const response = await fetch(`/api/pipeline/upload?filename=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "x-csrf-token": csrfToken }, body: file });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "上传失败");
+        showFileState(`已上传：${payload.data.originalName}，服务器文件：${payload.data.name}`, false);
+        await loadWorkbooks(payload.data.name);
+      } catch (error) { showFileState(error.message, true); setStatus(error.message, true); }
+      finally { setBusy(false); }
+    }
+
+    async function startRecognition() {
+      const mode = $("#pipelineMode").value;
+      const workbook = $("#workbookName").value;
+      if (mode === "recognize" && !workbook) return setStatus("识别模式请先拖拽或选择 Excel 文件", true);
+      const fromRow = Number($("#fromRow").value || 3); const toValue = $("#toRow").value.trim();
+      if (!Number.isInteger(fromRow) || fromRow < 1 || (toValue && (!Number.isInteger(Number(toValue)) || Number(toValue) < fromRow))) return setStatus("行范围填写不正确", true);
+      setBusy(true); setStatus(mode === "download" ? "正在启动下载汇总..." : mode === "full" ? "正在启动全流程..." : "正在启动识别..."); appendLog(`${mode === "download" ? "开始下载汇总" : mode === "full" ? "开始全流程" : "开始识别"}${workbook ? "：" + workbook : ""}`);
+      try {
+        const response = await api("/api/pipeline/jobs", { method: "POST", body: JSON.stringify({ mode, workbook: mode === "recognize" ? workbook : "", date: $("#date").value.trim() || yesterday(), fromRow, toRow: toValue ? Number(toValue) : null, inPlace: $("#inPlace").checked, debug: $("#debug").checked }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 409 && bindActiveJob(payload.data?.activeJob)) {
+            appendLog(`检测到正在运行的任务：${jobId}`);
+            setStatus("已有批量任务正在运行，可点击“终止任务”取消");
+            return poll();
+          }
+          throw new Error(payload.error || "任务启动失败");
+        }
+        jobId = payload.data.id;
+        setJobRunning(true);
+        appendLog(`任务已启动：${jobId}`);
+        poll();
+      } catch (error) { setBusy(false); setStatus(error.message, true); appendLog("错误：" + error.message); }
+    }
+
+    async function restoreActiveJob() {
+      try {
+        const response = await fetch("/api/pipeline", { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return false;
+        if (bindActiveJob(payload.data?.activeJob)) {
+          appendLog(`已恢复正在运行的任务：${jobId}`);
+          setStatus("检测到已有批量任务，正在恢复状态...");
+          poll();
+          return true;
+        }
+        if (payload.data?.busy) setStatus("已有其他账号的批量任务正在运行，当前账号无权终止", true);
+      } catch (error) {
+        appendLog(`读取活动任务失败：${error.message}`);
+      }
+      return false;
+    }
+
+    function bindActiveJob(job) {
+      if (!job?.id || TERMINAL_JOB_STATUSES.has(job.status)) return false;
+      jobId = job.id;
+      setJobRunning(true);
+      return true;
+    }
+
+    async function poll() {
+      if (!jobId) return;
+      const response = await fetch(`/api/pipeline/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return finish(false, payload.error || "任务状态读取失败");
+      const job = payload.data; updateRowProgress(job); if (job.logs?.length) { $("#log").textContent = job.logs.map((entry) => `${entry.time ? new Date(entry.time).toLocaleTimeString("zh-CN", { hour12: false }) + " " : ""}${entry.message || entry}`).join("\n"); $("#log").scrollTop = $("#log").scrollHeight; }
+      if (job.status === "waiting_login" || job.loginPending) {
+        const waitingForManualLogin = job.status === "waiting_login";
+        setPipelineBackendStatus("yellow", "登录验证中");
+        setJobRunning(true);
+        $("#continueLogin").classList.toggle("hidden", !waitingForManualLogin);
+        showPipelineLoginPanel();
+        if (job.loginScreenshotAvailable) await refreshPipelineLoginScreenshot();
+        setStatus(waitingForManualLogin ? "请扫描下方二维码，手机端确认后点击“我已完成登录，继续”" : "正在确认登录状态，请稍候...", false);
+        pollTimer = setTimeout(poll, 1500);
+        return;
+      }
+      setPipelineBackendStatus("green", "后台已登录");
+      $("#continueLogin").classList.add("hidden");
+      hidePipelineLoginPanel();
+      if (TERMINAL_JOB_STATUSES.has(job.status)) {
+        const succeeded = SUCCESS_JOB_STATUSES.has(job.status);
+        const cancelled = job.status === "cancelled";
+        const message = job.error || (cancelled ? "任务已终止" : job.stage || `任务${job.status}`);
+        return finish(succeeded, message, job, !succeeded && !cancelled);
+      }
+      setJobRunning(true);
+      setStatus(`任务运行中：${job.stage || job.status}`); pollTimer = setTimeout(poll, 1000);
+    }
+
+    async function continueLogin() {
+      clearTimeout(pollTimer);
+      $("#continueLogin").classList.add("hidden");
+      setBusy(true);
+      const response = await api(`/api/pipeline/jobs/${encodeURIComponent(jobId)}/continue-login`, { method: "POST", body: "{}" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        return finish(false, payload.error || "登录继续失败");
+      }
+      hidePipelineLoginPanel();
+      appendLog("已提交人工登录确认");
+      poll();
+    }
+
+    function showPipelineLoginPanel() {
+      $("#pipelineLoginPanel").classList.remove("hidden");
+    }
+
+    function hidePipelineLoginPanel() {
+      $("#pipelineLoginPanel").classList.add("hidden");
+      const image = $("#pipelineLoginScreenshot");
+      if (image.dataset.objectUrl) URL.revokeObjectURL(image.dataset.objectUrl);
+      delete image.dataset.objectUrl;
+      image.removeAttribute("src");
+      image.hidden = true;
+      image.classList.add("hidden");
+    }
+
+    async function refreshPipelineLoginScreenshot() {
+      if (!jobId) return false;
+      try {
+        const response = await fetch(`/api/pipeline/jobs/${encodeURIComponent(jobId)}/login-screenshot?t=${Date.now()}`, { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) {
+          $("#pipelineLoginHint").textContent = "登录画面正在生成，请稍候...";
+          return false;
+        }
+        const blob = await response.blob();
+        const image = $("#pipelineLoginScreenshot");
+        if (image.dataset.objectUrl) URL.revokeObjectURL(image.dataset.objectUrl);
+        const objectUrl = URL.createObjectURL(blob);
+        image.dataset.objectUrl = objectUrl;
+        image.src = objectUrl;
+        image.hidden = false;
+        image.classList.remove("hidden");
+        $("#pipelineLoginHint").textContent = `登录画面已刷新：${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
+        return true;
+      } catch {
+        $("#pipelineLoginHint").textContent = "登录画面读取失败，正在重试...";
+        return false;
+      }
+    }
+
+    async function cancelCurrentJob() {
+      if (!jobId || cancellingJob) return;
+      if (!window.confirm("确定要终止当前批量任务吗？已执行的步骤不会自动撤销。")) return;
+      clearTimeout(pollTimer);
+      cancellingJob = true;
+      $("#cancelJob").disabled = true;
+      $("#continueLogin").classList.add("hidden");
+      setStatus("正在终止任务...");
+      appendLog(`正在终止任务：${jobId}`);
+      try {
+        const response = await api(`/api/pipeline/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "终止任务失败");
+        finish(false, "任务已终止", payload.data || {}, false);
+      } catch (error) {
+        cancellingJob = false;
+        $("#cancelJob").disabled = false;
+        setJobRunning(true);
+        setStatus(error.message, true);
+        appendLog(`终止失败：${error.message}`);
+      }
+    }
+
+    function finish(ok, message, job = {}, error = !ok) { clearTimeout(pollTimer); hidePipelineLoginPanel(); setJobRunning(false); setStatus(message, error); appendLog(message); const result = $("#result"); if (ok && job.resultFile && jobId) { const href = `/api/pipeline/jobs/${encodeURIComponent(jobId)}/download`; result.innerHTML = `结果文件已写回：<strong>${escapeHtml(job.resultFile)}</strong><a class="ml-3 inline-block rounded bg-emerald-600 px-3 py-1 text-white hover:bg-emerald-700" href="${href}">下载结果文件</a>`; result.classList.remove("hidden"); appendLog(`结果文件已生成：${job.resultFile}`); } else if (!ok) { result.classList.add("hidden"); } }
+    function updateModeUI() {
+      const mode = $("#pipelineMode").value;
+      $("#workbookName").disabled = mode !== "recognize";
+      $("#inPlace").disabled = mode === "download";
+      $("#fromRow").disabled = mode === "download";
+      $("#toRow").disabled = mode === "download";
+      $("#start").innerHTML = mode === "download" ? '<i class="fa fa-download"></i>开始下载汇总' : mode === "full" ? '<i class="fa fa-play"></i>一键下载、合并并识别' : '<i class="fa fa-play"></i>开始识别并写回';
+      $("#workflowHint").textContent = mode === "download" ? "仅执行 FineBI 关键词下载与 Excel 合并，不进入拟人工识别。" : mode === "full" ? "一键下载 12 个关键词、按用户 ID 合并去重，再执行拟人工识别。" : "使用已上传或服务器上的合并 Excel，按行范围执行拟人工识别并写回。";
+    }
+    function setPipelineBackendStatus(state, label) { const el = $("#pipeline-backend-status"); if (!el) return; el.classList.remove("backend-status-red", "backend-status-yellow", "backend-status-green"); el.classList.add(`backend-status-${state}`); el.querySelector("span:last-child").textContent = label; }
+    function updateRowProgress(job) {
+      const logs = Array.isArray(job?.logs) ? job.logs.map((entry) => String(entry?.message || entry || "")) : [];
+      const progress = { rowNumber: null, context: "pending", order: "pending" };
+
+      for (const line of logs) {
+        const marker = parseRowProgressMarker(line);
+        if (marker) {
+          if (progress.rowNumber !== marker.rowNumber) resetCurrentRowProgress(progress, marker.rowNumber);
+          if (marker.area === "context" || marker.area === "order") progress[marker.area] = marker.state;
+          continue;
+        }
+
+        const scanMatch = line.match(/K列固定关键词扫描（行\s*(\d+)）/);
+        if (scanMatch) {
+          resetCurrentRowProgress(progress, Number(scanMatch[1]));
+          continue;
+        }
+
+        const activeMatch = line.match(/行\s*(\d+)正在等待豆包(?:分类|生成三天总结)/);
+        if (activeMatch) {
+          const rowNumber = Number(activeMatch[1]);
+          if (progress.rowNumber !== rowNumber) resetCurrentRowProgress(progress, rowNumber);
+          progress.context = "viewed";
+          progress.order = "viewed";
+          continue;
+        }
+
+        const completedMatch = line.match(/行\s*(\d+)\s+(?:可写回|待复核|处理失败)/);
+        if (completedMatch) {
+          const rowNumber = Number(completedMatch[1]);
+          if (progress.rowNumber !== rowNumber) resetCurrentRowProgress(progress, rowNumber);
+          progress.context = "summarized";
+          progress.order = "summarized";
+        }
+      }
+
+      $("#currentProgressRow").textContent = progress.rowNumber || "--";
+      renderCurrentRowStage("context", progress.context);
+      renderCurrentRowStage("order", progress.order);
+    }
+
+    function parseRowProgressMarker(line) {
+      const markerIndex = line.indexOf("WEB_ROW_PROGRESS=");
+      if (markerIndex < 0) return null;
+      try {
+        const value = JSON.parse(line.slice(markerIndex + "WEB_ROW_PROGRESS=".length));
+        const rowNumber = Number(value.rowNumber);
+        const area = String(value.area || "");
+        const state = String(value.state || "");
+        if (!Number.isInteger(rowNumber) || !["context", "order"].includes(area) || !["pending", "viewed", "summarized"].includes(state)) return null;
+        return { rowNumber, area, state };
+      } catch {
+        return null;
+      }
+    }
+
+    function resetCurrentRowProgress(progress, rowNumber) {
+      progress.rowNumber = Number.isInteger(rowNumber) ? rowNumber : null;
+      progress.context = "pending";
+      progress.order = "pending";
+    }
+
+    function renderCurrentRowStage(area, currentState) {
+      const states = ["pending", "viewed", "summarized"];
+      const currentIndex = Math.max(0, states.indexOf(currentState));
+      document.querySelectorAll(`[data-progress-area="${area}"]`).forEach((element) => {
+        const stateIndex = states.indexOf(element.dataset.progressState);
+        element.classList.toggle("is-complete", stateIndex < currentIndex);
+        element.classList.toggle("is-current", stateIndex === currentIndex);
+      });
+    }
+    function setBusy(busy) { $("#start").disabled = busy; }
+    function setJobRunning(running) { setBusy(running); $("#cancelJob").classList.toggle("hidden", !running); if (!running) cancellingJob = false; $("#cancelJob").disabled = cancellingJob; if (!running) $("#continueLogin").classList.add("hidden"); }
+    function setStatus(message, error = false) { $("#status").textContent = message; $("#status").className = `text-xs ${error ? "text-rose-600" : "text-slate-500"}`; }
+    function showFileState(message, error) { const el = $("#fileState"); el.className = `mt-3 rounded-md border p-3 text-sm ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`; el.textContent = message; el.classList.remove("hidden"); }
+    function appendLog(message) { $("#log").textContent += `${$("#log").textContent ? "\n" : ""}${new Date().toLocaleTimeString("zh-CN", { hour12: false })} ${message}`; }
+    function api(url, options = {}) { const headers = new Headers(options.headers || {}); headers.set("content-type", "application/json"); headers.set("x-csrf-token", csrfToken); return fetch(url, { ...options, headers }); }
+    function formatBytes(size) { if (size < 1024) return `${size}B`; if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`; return `${(size / 1024 / 1024).toFixed(1)}MB`; }
+    function escapeHtml(value) { return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
+  </script>
+</body>
+</html>

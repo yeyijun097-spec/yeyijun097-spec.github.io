@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="app-build" content="20260723-3">
+  <title>用户信息查询 · 客满运营台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/workbench.css?v=20260723-4">
+</head>
+<body>
+  <div class="workbench">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-symbol">KM</div>
+        <div class="brand-copy"><strong>客满运营台</strong><span>OPERATIONS CONSOLE</span></div>
+      </div>
+      <nav class="sidebar-nav" aria-label="主菜单">
+        <a class="sidebar-link active" href="/" aria-current="page"><i class="fa fa-search"></i><span>用户信息查询</span></a>
+        <a class="sidebar-link" href="/photo-complaints"><i class="fa fa-camera"></i><span>图片录单</span></a>
+        <a class="sidebar-link" href="/pipeline"><i class="fa fa-tasks"></i><span>敏感词批量处理</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <a id="admin-link" class="account-admin-link hidden" href="/admin"><i class="fa fa-users"></i><span>账号管理 / 新建账号</span></a>
+        <div class="account-row">
+          <div class="account-avatar">管</div>
+          <div class="account-copy"><strong id="user-name">当前账号</strong><span>系统管理员</span></div>
+          <button id="logout" class="logout-button" title="退出登录" aria-label="退出登录"><i class="fa fa-sign-out"></i></button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div><h1 class="page-title">用户信息查询</h1><p class="page-subtitle">按用户 ID 或手机号聚合订单、训练营与投诉信息</p></div>
+        <span class="online-pill">查询服务在线</span>
+      </header>
+
+      <div class="content-shell">
+        <section class="panel">
+          <div class="panel-heading">
+            <div><h2>查询条件</h2><p>输入任一用户标识，选择范围后开始查询。</p></div>
+            <div class="query-status-stack">
+              <span class="online-pill">支持用户 ID / 手机号</span>
+              <span id="backend-status" class="backend-status backend-status-red" role="status" aria-live="polite"><i class="status-light"></i><span>后台未登录</span></span>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="query-grid">
+              <label><span class="field-label">用户 ID</span><input id="user-id" class="field-control" placeholder="请输入用户 ID"></label>
+              <label><span class="field-label">手机号</span><input id="phone" class="field-control" inputmode="numeric" placeholder="请输入手机号"></label>
+              <label><span class="field-label">查询范围</span><select id="mode" class="field-control"><option value="all">全部信息</option><option value="order">订单信息</option><option value="schedule">训练营信息</option><option value="complaint">投诉 / 跟进</option></select></label>
+              <div class="action-row"><button id="query" class="btn btn-primary">开始查询</button><button id="login" class="btn btn-secondary">验证后台</button></div>
+            </div>
+            <div class="divider"></div>
+            <p class="hint-line">全部信息将依次读取学员档案、订单详情及投诉/跟进页面；后台登录态失效时，点击“验证后台”完成扫码验证。</p>
+            <div id="error" class="mt-4 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+          </div>
+        </section>
+
+        <section id="query-progress-panel" class="panel mt-5 query-progress-panel hidden" hidden aria-hidden="true">
+          <div class="panel-heading">
+            <div><h2>查询进度</h2><p id="query-progress-label">等待开始查询</p></div>
+            <span id="query-progress-state" class="progress-state">未开始</span>
+          </div>
+          <div class="panel-body">
+            <div id="query-progress-steps" class="query-progress-steps" aria-live="polite">
+              <div class="query-progress-step" data-progress-step="profile"><i class="fa fa-user"></i><span>用户档案</span></div>
+              <div class="query-progress-step" data-progress-step="orders"><i class="fa fa-shopping-cart"></i><span>订单信息</span></div>
+              <div class="query-progress-step" data-progress-step="schedule"><i class="fa fa-calendar"></i><span>营期信息</span></div>
+              <div class="query-progress-step" data-progress-step="complaints"><i class="fa fa-commenting"></i><span>投诉信息</span></div>
+            </div>
+            <p id="query-progress-detail" class="query-progress-detail">输入用户 ID 或手机号后开始查询。</p>
+          </div>
+        </section>
+
+        <section id="login-panel" class="panel mt-5 hidden is-hidden" hidden aria-hidden="true">
+          <div class="panel-heading">
+            <div><h2>兴趣岛登录验证</h2><p id="login-status">正在准备浏览器...</p></div>
+            <div class="action-row">
+              <button id="refresh-login" class="btn btn-secondary">刷新二维码</button>
+              <button id="cancel-login" class="btn btn-secondary">取消</button>
+            </div>
+          </div>
+          <div id="login-panel-body" class="panel-body hidden" hidden><img id="login-shot" class="login-shot hidden rounded-md border border-slate-200" hidden alt="扫码登录页面"></div>
+        </section>
+
+        <section id="result" class="mt-5 hidden"></section>
+      </div>
+    </main>
+  </div>
+
+<script src="/orderDetailState.js?v=20260725-1"></script>
+<script>
+const $=id=>document.getElementById(id); let csrf=""; let loginTimer=null; let queryProgressTimer=null; let activeProgressId=""; let queryInProgress=false; let loginScreenshotError=""; let loginStartPromise=null; let loginAttemptedForProgressId=""; let lastQueryResult=null;
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const val=v=>v===null||v===undefined||v===""?"-":esc(v);
+async function api(url,opt={}){ const headers={...(opt.headers||{})}; if(csrf) headers["x-csrf-token"]=csrf; const r=await fetch(url,{credentials:"same-origin",...opt,headers}); const text=await r.text(); let body=null; try{body=text?JSON.parse(text):null}catch{} if(!r.ok){const timeout=r.status===502||r.status===504;const message=timeout?"连接暂时中断，后台任务仍在继续查询":body?.error||(text&&/<html[\s>]/i.test(text)?"后台返回了 HTML 错误页面":"服务器返回了无法解析的内容");throw Object.assign(new Error(message||"请求失败"),{body,status:r.status,nonJson:!body})} if(!body){throw Object.assign(new Error("服务器返回空响应，后台任务可能仍在执行"),{status:r.status,nonJson:true})} return body }
+function setError(msg){$("error").textContent=msg||"";$("error").classList.toggle("hidden",!msg)}
+function showQueryProgress(){
+  const panel=$("query-progress-panel");
+  if(!panel)return;
+  panel.hidden=false;panel.setAttribute("aria-hidden","false");panel.classList.remove("hidden");
+}
+function hideQueryProgress(){
+  const panel=$("query-progress-panel");
+  if(!panel)return;
+  panel.hidden=true;panel.setAttribute("aria-hidden","true");panel.classList.add("hidden");
+}
+function resetQueryProgress(){
+  showQueryProgress();
+  $("query-progress-label").textContent="已提交查询，等待后台任务";
+  $("query-progress-detail").textContent="正在准备查询条件...";
+  $("query-progress-state").textContent="进行中";
+  $("query-progress-state").className="progress-state progress-state-active";
+  document.querySelectorAll("[data-progress-step]").forEach(step=>step.className="query-progress-step");
+}
+function updateQueryProgress(data={}){
+  showQueryProgress();
+  const state=data.state||"running";
+  $("query-progress-label").textContent=data.label||"正在查询";
+  const counts=data.counts||{};
+  const countText=counts.ordersFound?`订单 ${counts.ordersProcessed||0} / ${counts.ordersFound}${counts.formalTotal?`，正式营期数 ${counts.formalProcessed||0} / ${counts.formalTotal}`:""}`:"";
+  $("query-progress-detail").textContent=[data.detail||"后台正在读取数据...",countText].filter(Boolean).join(" · ");
+  $("query-progress-state").textContent=state==="done"?"已完成":state==="partial"?"部分完成":state==="error"?"查询失败":state==="waiting"?"等待验证":"进行中";
+  $("query-progress-state").className=`progress-state progress-state-${state==="done"||state==="partial"?"done":state==="error"?"error":state==="waiting"?"waiting":"active"}`;
+  const steps=Array.isArray(data.steps)?data.steps:[];
+  document.querySelectorAll("[data-progress-step]").forEach(step=>{
+    const key=step.dataset.progressStep;
+    const item=steps.find(value=>value.key===key);
+    const status=item?.status||"pending";
+    step.className=`query-progress-step is-${status}`;
+    const icon=step.querySelector("i");
+    if(icon)icon.className=status==="done"?"fa fa-check":status==="error"?"fa fa-exclamation":"fa "+({profile:"fa-user",orders:"fa-shopping-cart",schedule:"fa-calendar",complaints:"fa-commenting"}[key]||"fa-circle-o");
+  });
+}
+async function pollQueryProgress(){
+  if(!activeProgressId)return;
+  try{
+    const r=await api(`/api/user-overview/progress?progressId=${encodeURIComponent(activeProgressId)}`);
+    const data=r.data||{};
+    updateQueryProgress(data);
+    if(data.state==="waiting"&&!loginStartPromise&&loginAttemptedForProgressId!==activeProgressId){
+      loginAttemptedForProgressId=activeProgressId;
+      setError("后台登录态失效，正在打开扫码验证");
+      startLogin();
+    }
+    if(data.partial?.orders)renderPartialOrders(data.partial.orders,data.partial.orderGroups);
+    if(data.result){lastQueryResult=data.result;render(data.result)}
+    if(data.state==="done"||data.state==="partial"||data.state==="error"){
+      queryInProgress=false;
+      sessionStorage.removeItem("iis.overview.progressId");
+      clearTimeout(queryProgressTimer);queryProgressTimer=null;
+      $("query").disabled=false;$("query").textContent="开始查询";
+      if(data.state==="error")setError(data.detail||"查询失败");
+      return;
+    }
+  }catch(error){
+    updateQueryProgress({state:"running",stage:"connect",label:"连接暂时中断",detail:"连接已断开，后台仍在继续查询，页面会自动重试"});
+  }
+  clearTimeout(queryProgressTimer);
+  queryProgressTimer=setTimeout(pollQueryProgress,800);
+}
+function finishQueryProgress(data){
+  clearTimeout(queryProgressTimer);queryProgressTimer=null;
+  updateQueryProgress(data);
+}
+function section(number,title,body,id=""){return `<section${id?` id="${esc(id)}"`:""} class="panel result-section"><div class="section-header"><span class="section-number">${esc(number)}</span><h2>${esc(title)}</h2></div><div class="section-content">${body}</div></section>`}
+function table(rows,cols){if(!rows?.length)return '<p class="empty-state">暂无记录</p>';return `<div class="data-table-wrap"><table class="data-table"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td class="whitespace-pre-wrap">${val(r[c[0]])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}
+function summary(items){return `<div class="summary-grid">${items.map(item=>`<div class="summary-item"><span>${esc(item[0])}</span><strong>${val(item[1])}</strong></div>`).join("")}</div>`}
+function orderRows(overview,groups){return Array.isArray(overview.orders)&&overview.orders.length?overview.orders:groups}
+function maskedPhone(value){const text=String(value||"").trim();if(!text)return"";if(text.includes("*"))return text;return text.replace(/^(\d{3})\d+(\d{4})$/,"$1****$2")}
+function orderDetail(order={},fallback={},allowFallback=false){
+  const red=order.redBox||(allowFallback?fallback.red||{}:{}), course=allowFallback?fallback.course||{}:{}, ord=allowFallback?fallback.order||{}:{}, schedule=order.campSchedule||{}, detail=order.detail||{};
+  const detailState=order.detailMode==="inline-card"?"卡片详情已读取":order.detailMatched?"后备详情已读取":order.detailOpened?"详情已打开":"详情字段不足";
+  const html=[
+    summary([
+      ["所属品类",detail.category||red.category||course.category],
+      ["训练营名称",detail.trainingName||red.trainingCampName||schedule.trainingCampName||schedule.campName||order.detailProductName||order.productName||course.campName],
+      ["支付 / 订单时间",detail.orderTime||order.orderTime||course.startTime||red.startTime],
+      ["详情状态",detailState]
+    ]),
+    summary([
+      ["订单 ID",detail.mainOrderId||order.orderId],
+      ["营类型",order.campTypeLabel||order.orderTypeLabel||order.orderType],
+      ["订单金额",detail.amountText||order.amountText||order.amount],
+      ["期数 / 班级",[detail.periodName||schedule.periodName||order.periodName||ord.periodName,detail.className||schedule.className].filter(Boolean).join(" / ")],
+      ["处理状态",order.error||detailState]
+    ])
+  ];
+  const formalOrder=String(order.campType||order.orderType||"").toLowerCase()==="formal"||order.campTypeLabel==="正式营"||order.orderTypeLabel==="正式营"||schedule.membershipMatched;
+  const experienceOrder=String(order.campType||order.orderType||"").toLowerCase()==="experience"||order.campTypeLabel==="体验营"||order.orderTypeLabel==="体验营";
+  const scheduleInfo=[["开营时间",schedule.startTime||red.startTime],["结营时间",schedule.endTime],["匹配状态",schedule.matched?"已匹配":schedule.error||"未匹配"]].filter(item=>item[1]);
+  if(formalOrder&&scheduleInfo.length) html.push(`<div class="order-detail-block"><strong>营期信息</strong>${summary(scheduleInfo)}</div>`);
+  if(formalOrder||experienceOrder||order.salesOwner){
+    const teacherInfo=[
+      ["售前老师",detail.salesOwner||schedule.salesOwner||order.salesOwner||ord.salesOwner||order.salesName||ord.salesName||""],
+      ["售后老师",detail.afterSalesTeacher||schedule.afterSalesReception||order.afterSalesReception||ord.afterSalesReception||order.afterSalesTeacher||ord.afterSalesTeacher||""]
+    ];
+    html.push(`<div class="order-detail-block"><strong>老师信息</strong>${summary(teacherInfo)}</div>`);
+  }
+  return `<div class="order-detail-panel">${html.join("")}</div>`;
+}
+let activeOrderIndex=0;
+let detailExpanded=true;
+function orderTable(rows,selectedIndex=0,detailExpanded=true){
+  if(!rows?.length)return '<p class="empty-state">暂无订单记录</p>';
+  const cols=[["campTypeLabel","类型"],["orderId","订单 ID"],["productName","商品名称"],["orderTime","订单时间"],["detailProductName","详情商品"],["detailMatched","详情状态"],["error","处理状态"]];
+  const detailFor=Math.max(0,Math.min(Number(selectedIndex)||0,rows.length-1));
+  const body=rows.map((r,i)=>{
+    const selected=i===detailFor;
+    const aria=window.OrderDetailState.getOrderDetailAccessibility({activeOrderIndex:detailFor,detailExpanded},i);
+    const row=`<tr class="order-row${selected?" is-selected":""}" tabindex="0" role="button" aria-pressed="${selected?"true":"false"}" aria-expanded="${aria.expanded}" aria-controls="${aria.controls}" data-order-index="${i}">${cols.map(c=>`<td class="whitespace-pre-wrap">${val(c[0]==="detailMatched"?(r.detailMatched?"已匹配":r.detailOpened?"已打开":"-"):r[c[0]])}</td>`).join("")}</tr>`;
+    if(!selected)return row;
+    return `${row}<tr class="order-detail-row" data-detail-for="${i}"><td colspan="${cols.length}"><div id="order-detail-panel" class="order-detail-shell${detailExpanded?" is-open":""}"><div class="order-detail-inner">${orderDetail(r,{},false)}</div></div></td></tr>`;
+  }).join("");
+  return `<div class="order-table-hint">点击任一订单行，在该订单下方展开对应详情。</div><div class="data-table-wrap"><table class="data-table order-table"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+let orderViewState={orders:[],fallback:{}};
+let orderTransitioning=false;
+function renderPartialOrders(orders=[],groups={}){
+  const previous=lastQueryResult||{overview:{basic:{},course:{},chance:{},order:{},redBox:{},complaints:[]}};
+  const overview={...(previous.overview||{}),orders,orderGroups:groups||{}};
+  render({...previous,overview,error:previous.error||""});
+}
+function activateOrder(index){
+  if(orderTransitioning||!orderViewState.orders[index]||!window.OrderDetailState?.toggleOrderDetail)return;
+  const table=$("orders-section")?.querySelector(".order-table");
+  const tbody=table?.tBodies[0],detailRow=tbody?.querySelector(".order-detail-row"),shell=detailRow?.querySelector(".order-detail-shell"),inner=detailRow?.querySelector(".order-detail-inner"),targetRow=tbody?.querySelector(`.order-row[data-order-index="${index}"]`);
+  if(!tbody||!detailRow||!shell||!inner||!targetRow)return;
+  const nextState=window.OrderDetailState.toggleOrderDetail({activeOrderIndex,detailExpanded},index);
+  if(index===activeOrderIndex){
+    detailExpanded=nextState.detailExpanded;
+    updateOrderAccessibility(table);
+    shell.classList.toggle("is-open",detailExpanded);
+    return;
+  }
+  orderTransitioning=true;
+  shell.classList.remove("is-open");
+  let moved=false;
+  const moveAndExpand=()=>{
+    if(moved)return;
+    moved=true;
+    activeOrderIndex=nextState.activeOrderIndex;
+    detailExpanded=nextState.detailExpanded;
+    detailRow.dataset.detailFor=String(index);
+    targetRow.after(detailRow);
+    inner.innerHTML=orderDetail(orderViewState.orders[index],{},false);
+    updateOrderAccessibility(table);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      shell.classList.add("is-open");
+      orderTransitioning=false;
+    }));
+  };
+  const onTransitionEnd=event=>{
+    if(event.target===shell&&event.propertyName==="grid-template-rows"){
+      shell.removeEventListener("transitionend",onTransitionEnd);
+      moveAndExpand();
+    }
+  };
+  shell.addEventListener("transitionend",onTransitionEnd);
+  setTimeout(()=>{
+    shell.removeEventListener("transitionend",onTransitionEnd);
+    moveAndExpand();
+  },360);
+}
+function updateOrderAccessibility(table){
+  table.querySelectorAll(".order-row").forEach(row=>{
+    const index=Number(row.dataset.orderIndex);
+    const selected=index===activeOrderIndex;
+    const aria=window.OrderDetailState.getOrderDetailAccessibility({activeOrderIndex,detailExpanded},index);
+    row.classList.toggle("is-selected",selected);
+    row.setAttribute("aria-pressed",selected?"true":"false");
+    row.setAttribute("aria-expanded",aria.expanded);
+    row.setAttribute("aria-controls",aria.controls);
+  });
+}
+function bindOrderRows(orders,fallback){orderViewState={orders:Array.isArray(orders)?orders:[],fallback:fallback||{}}}
+function render(data){
+  lastQueryResult=data;
+  const o=data.overview||{}; const b=o.basic||{}, c=o.course||{}, ch=o.chance||{}, ord=o.order||{}, red=o.redBox||{};
+  const groups=[...(o.orderGroups?.formal||[]),...(o.orderGroups?.experience||[]),...(o.orderGroups?.other||[])];
+  const orders=orderRows(o,groups);
+  const complaints=o.complaints||[];
+  const displayName=b.name||b.nickname||"用户";
+  let html=`<section class="panel"><div class="profile-overview"><div class="profile-main"><div class="profile-avatar">${esc(String(displayName).slice(0,1)||"用")}</div><div><h3>${val(displayName)}</h3><p>用户 ID：${val(b.userId)} · 手机号：${val(b.phone)}</p></div></div><div class="metric"><span>订单记录</span><strong>${orders.length} 条</strong></div><div class="metric"><span>当前训练营</span><strong>${val(red.trainingCampName||c.campName)}</strong></div><div class="metric"><span>投诉记录</span><strong>${complaints.length} 条</strong></div></div></section>`;
+  if(activeOrderIndex>=orders.length)activeOrderIndex=0;
+  html+=section("01","订单与训练营",orderTable(orders,activeOrderIndex,detailExpanded),"orders-section");
+  html+=section("02",`投诉记录（${complaints.length}）`,table(complaints,Object.keys(complaints[0]||{}).slice(0,7).map(k=>[k,k])));
+  if(data.error) html+=`<div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">${esc(data.error)}</div>`;
+  $("result").innerHTML=html; $("result").classList.remove("hidden"); bindOrderRows(orders,{course:c,order:ord,red});
+}
+function setBackendStatus(state,label){const el=$("backend-status");if(!el)return;el.classList.remove("backend-status-red","backend-status-yellow","backend-status-green");el.classList.add(`backend-status-${state}`);el.querySelector("span:last-child").textContent=label}
+async function resumeQuery(){const saved=sessionStorage.getItem("iis.overview.progressId");if(!saved)return;activeProgressId=saved;queryInProgress=true;$("query").disabled=true;$("query").textContent="查询中...";showQueryProgress();updateQueryProgress({state:"running",stage:"connect",label:"正在恢复后台查询",detail:"页面已恢复，正在读取已完成结果"});pollQueryProgress()}
+async function loadSession(){try{const r=await api('/api/session');csrf=r.csrfToken||"";$("user-name").textContent=r.user?.username||"当前账号";if(r.user?.role==='admin')$("admin-link").classList.remove('hidden');setBackendStatus("yellow","正在检查后台登录");pollLogin();resumeQuery()}catch(e){setBackendStatus("red","后台未登录");location.href='/login'}}
+function clearLoginShot(){
+  const image=$("login-shot"),body=$("login-panel-body");
+  loginScreenshotError="";
+  if(image?.dataset.objectUrl){URL.revokeObjectURL(image.dataset.objectUrl);delete image.dataset.objectUrl}
+  if(image){image.removeAttribute("src");image.hidden=true;image.setAttribute("aria-hidden","true");image.classList.add("hidden")}
+  if(body){body.hidden=true;body.setAttribute("aria-hidden","true");body.classList.add("hidden")}
+}
+function hideLoginPanel(){
+  clearTimeout(loginTimer);loginTimer=null;
+  const panel=$("login-panel");
+  panel.hidden=true;panel.setAttribute("aria-hidden","true");panel.classList.add("hidden","is-hidden");panel.style.display="none";
+  clearLoginShot();
+}
+function revealLoginPanel(){
+  const panel=$("login-panel");
+  panel.hidden=false;panel.setAttribute("aria-hidden","false");panel.classList.remove("hidden","is-hidden");panel.style.removeProperty("display");
+}
+function showLogin(){
+  revealLoginPanel();
+  clearLoginShot();setBackendStatus("yellow","登录验证中");$("login-status").textContent="第1步：正在启动登录验证...";
+}
+async function refreshLoginScreenshot(){
+  loginScreenshotError="";
+  try{
+    const response=await fetch('/api/backend-login/screenshot?t='+Date.now(),{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok){
+      loginScreenshotError=response.status===404?"二维码会话正在准备，页面会自动重试":`二维码图片加载失败（HTTP ${response.status}）`;
+      return false;
+    }
+    const blob=await response.blob();
+    if(!/^image\//i.test(blob.type||"")){
+      loginScreenshotError="二维码接口返回的不是图片，页面会自动重试";
+      return false;
+    }
+    const image=$("login-shot"),body=$("login-panel-body");
+    if(image.dataset.objectUrl)URL.revokeObjectURL(image.dataset.objectUrl);
+    const objectUrl=URL.createObjectURL(blob);
+    const loaded=await new Promise(resolve=>{
+      image.onload=()=>resolve(true);
+      image.onerror=()=>resolve(false);
+      image.src=objectUrl;
+    });
+    if(!loaded){
+      URL.revokeObjectURL(objectUrl);
+      image.removeAttribute("src");
+      loginScreenshotError="二维码图片无法在浏览器中解码，页面会自动重试";
+      return false;
+    }
+    image.dataset.objectUrl=objectUrl;
+    image.hidden=false;image.setAttribute("aria-hidden","false");image.classList.remove("hidden");
+    if(body){body.hidden=false;body.setAttribute("aria-hidden","false");body.classList.remove("hidden")}
+    return true;
+  }catch(error){
+    loginScreenshotError=`二维码图片加载失败：${error.message||"网络错误"}`;
+    return false;
+  }
+}
+async function startLogin(){
+  if(loginStartPromise)return loginStartPromise;
+  showLogin();
+  loginStartPromise=(async()=>{
+    try{
+      const r=await api('/api/backend-login/start',{method:'POST'});
+      if(r.data?.screenshotAvailable)await refreshLoginScreenshot();
+      await pollLogin();
+      return r;
+    }catch(e){
+      setBackendStatus("red","后台未登录");
+      $("login-status").textContent=e.message;
+      return null;
+    }finally{loginStartPromise=null}
+  })();
+  return loginStartPromise;
+}
+async function pollLogin(){clearTimeout(loginTimer);try{const r=await api('/api/backend-login/status');const d=r.data||{},queryActive=Boolean(queryInProgress&&!loginStartPromise&&r.queue?.busy&&!r.queue?.backendLoginActive);let screenshotLoaded=false;if(d.screenshotAvailable&&!d.ready)screenshotLoaded=await refreshLoginScreenshot();if(d.ready){setBackendStatus("green","后台已登录");$("login-status").textContent="第4步：后台登录已确认，可以开始查询";hideLoginPanel();return}if(queryActive){setBackendStatus("green","后台查询中");$("login-status").textContent="正在执行查询任务";hideLoginPanel();loginTimer=setTimeout(pollLogin,1500);return}if(d.state==="waiting"){revealLoginPanel();setBackendStatus("yellow","登录验证中");$("login-status").textContent=d.screenshotAvailable?(screenshotLoaded?"第3步：二维码已展示，请用手机扫码确认登录":`第3步：二维码已生成，但${loginScreenshotError||"图片暂时未显示"}...`):"第2步：登录页面已打开，正在准备验证画面..."}else if(loginStartPromise){revealLoginPanel();setBackendStatus("yellow","登录验证中");$("login-status").textContent="第1步：正在等待登录浏览器准备..."}else{setBackendStatus("red","后台未登录");$("login-status").textContent="尚未创建扫码会话，请点击“验证后台”"}loginTimer=setTimeout(pollLogin,d.state==="waiting"?1500:2500)}catch(e){revealLoginPanel();setBackendStatus("red","后台未登录");$("login-status").textContent=`登录验证状态读取失败：${e.message}`;loginTimer=setTimeout(pollLogin,2500)}}
+async function query(){setError("");const userId=$("user-id").value.trim(),phone=$("phone").value.trim();if(!userId&&!phone){setError("请填写用户 ID 或手机号");return}clearTimeout(loginTimer);loginTimer=null;hideLoginPanel();activeProgressId=`q_${Date.now()}_${Math.random().toString(36).slice(2,10)}`;loginAttemptedForProgressId="";sessionStorage.setItem("iis.overview.progressId",activeProgressId);resetQueryProgress();queryInProgress=true;setBackendStatus("green","后台查询中");$("query").disabled=true;$("result").classList.add("hidden");$("query").textContent="查询中...";try{const r=await api('/api/user-overview',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({userId,phone,mode:$("mode").value,progressId:activeProgressId})});const state=r.data?.state||"queued";updateQueryProgress({state,stage:state==="waiting"?"login":"queued",label:state==="waiting"?"等待后台登录验证":"已提交查询，等待后台任务",detail:state==="waiting"?"请完成扫码/验证后继续查询":"后台任务已创建"});if(r.data?.loginRequired){loginAttemptedForProgressId=activeProgressId;await startLogin()}pollQueryProgress()}catch(e){updateQueryProgress({state:"running",stage:"connect",label:"连接暂时中断",detail:e.message||"后台仍在继续查询"});setError(e.message||"查询请求已断开，后台任务仍在继续");pollQueryProgress()}}
+$("result").addEventListener("click",event=>{const row=event.target.closest("#orders-section .order-row");if(row)activateOrder(Number(row.dataset.orderIndex||0))});
+$("result").addEventListener("keydown",event=>{const row=event.target.closest("#orders-section .order-row");if(row&&(event.key==="Enter"||event.key===" ")){event.preventDefault();activateOrder(Number(row.dataset.orderIndex||0))}});
+$("query").addEventListener('click',query);$("login").addEventListener('click',startLogin);$("refresh-login").addEventListener('click',async()=>{showLogin();await startLogin()});$("cancel-login").addEventListener('click',async()=>{try{await api('/api/backend-login',{method:'DELETE'})}catch{}setBackendStatus("red","后台未登录");hideLoginPanel()});$("logout").addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST'})}finally{location.href='/login'}});loadSession();
+</script>
+</body>
+</html>
