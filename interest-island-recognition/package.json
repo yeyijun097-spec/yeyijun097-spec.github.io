@@ -1,0 +1,34 @@
+{
+  "name": "context-classifier-fill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "node src/index.js --limit 20",
+    "preview:web": "node src/index.js --limit 20",
+    "preview:rules": "node src/index.js --offline --limit 20 --no-llm",
+    "preview:llm": "node src/index.js --limit 20",
+    "write:last": "node src/writeLast.js",
+    "write": "node src/index.js --write",
+    "write:llm": "node src/index.js --write",
+    "diagnose": "node src/diagnose.js",
+    "debug:row": "node src/index.js --debug-row",
+    "debug:row3": "node src/index.js --debug-row 3 --keep-open",
+    "debug:row3:llm": "node src/index.js --debug-row 3 --keep-open",
+    "retry:failed": "node src/index.js --retry-failed --write",
+    "resume:write": "node src/index.js --resume --write",
+    "capture:api": "node src/index.js --debug-row 3 --keep-open --capture-api --ui",
+    "api:discover": "node src/index.js --api-discover --limit 1",
+    "chance:discover": "node src/index.js --chance-discover --limit 1",
+    "preview:api": "node src/index.js",
+    "write:api": "node src/index.js --write",
+    "preview:dom": "node src/index.js --dom",
+    "write:dom": "node src/index.js --dom --write",
+    "pipeline:full": "python3 scripts/run_full_pipeline.py",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,6 @@
+# 照片录单 OCR 运行时依赖；升级前须在测试环境完成兼容性验证。
+paddleocr==3.7.0
+paddlepaddle==3.1.1
+paddlex==3.7.2
+pandas==3.0.5
+numpy==2.3.5

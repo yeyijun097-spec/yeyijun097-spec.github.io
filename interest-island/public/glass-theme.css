@@ -1,0 +1,11 @@
+:root { font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color-scheme: light; }
+.glass-simple-page { min-width: 320px; min-height: 100vh; margin: 0; color: #172554; background: radial-gradient(circle at 10% 88%, rgba(96,165,250,.25), transparent 30rem), radial-gradient(circle at 90% 12%, rgba(196,181,253,.28), transparent 29rem), linear-gradient(135deg,#f9fcff,#eef6ff 52%,#e9edff); }
+.glass-simple-shell { width: min(100% - 2rem, 70rem); margin: 0 auto; padding: 2rem 0 3rem; }
+.glass-simple-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1.25rem 1.5rem; border:1px solid rgba(255,255,255,.75); border-radius:1.25rem; background:rgba(255,255,255,.52); box-shadow:0 1rem 2.8rem rgba(71,103,165,.09), inset 0 1px 0 rgba(255,255,255,.82); -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%); }
+.glass-simple-header h1 { margin:0; color:#172554; } .glass-simple-header p { margin:.35rem 0 0; color:#64748b; }
+.glass-card { border:1px solid rgba(255,255,255,.75)!important; border-radius:1.25rem!important; background:rgba(255,255,255,.58)!important; box-shadow:0 1rem 2.8rem rgba(71,103,165,.09), inset 0 1px 0 rgba(255,255,255,.82)!important; -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%); }
+.glass-simple-page input, .glass-simple-page select { border-color:rgba(148,163,184,.35)!important; border-radius:.75rem!important; background:rgba(255,255,255,.58)!important; } .glass-simple-page input:focus, .glass-simple-page select:focus { border-color:#6366f1!important; box-shadow:0 0 0 4px rgba(99,102,241,.13)!important; }
+.glass-primary { border:0; border-radius:.75rem; background:linear-gradient(100deg,#3b82f6,#5b76f2 48%,#8b5cf6); box-shadow:0 .75rem 1.5rem rgba(79,111,240,.22); }
+.glass-return { border-color:rgba(148,163,184,.34)!important; border-radius:.75rem!important; background:rgba(255,255,255,.58)!important; }
+.admin-page #users > article { border-color:rgba(148,163,184,.18)!important; } .admin-page #users button { border-color:rgba(148,163,184,.34); border-radius:.65rem; background:rgba(255,255,255,.52); }
+@media (max-width: 640px) { .glass-simple-shell { width:min(100% - 1.25rem,70rem); padding-top:1rem; } .glass-simple-header { align-items:flex-start; flex-direction:column; } }

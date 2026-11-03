@@ -1,0 +1,39 @@
+{
+  "name": "interest-island-user-overview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "基于 Node.js + Playwright 的兴趣岛管理后台用户信息一览工具",
+  "scripts": {
+    "start": "REQUIRE_PROXY_IDENTITY=false node src/server.js",
+    "start:production": "NODE_ENV=production CONFIG=config/production.json node src/server.js",
+    "add-user": "node scripts/add-user.mjs",
+    "query": "node src/queryCli.js",
+    "batch:intention": "node src/batchIntentionCli.js",
+    "debug:intention-dom": "node src/debugIntentionDom.js",
+    "clean:profile-weixin": "node src/cleanProfileWeixin.js",
+    "check": "node --check src/server.js && node --check src/pipelineService.js && node --check src/database.js && node --check src/userAuth.js && node --check src/queryCli.js && node --check src/batchIntentionCli.js && node --check src/debugIntentionDom.js && node --check src/cleanProfileWeixin.js && node --check src/config.js && node --check src/browserClient.js && node --check src/userOverviewService.js && node --check src/complaintService.js && node --check src/intentionOrderService.js && node --check src/complaintTaxonomy.js && node --check src/photoComplaintParser.js && node --check src/photoComplaintService.js && node --check src/photoComplaintAutomation.js && node --check src/domUtils.js && node --check src/logger.js && node --check src/lifecycleCleanup.js && node --check src/complaintConsistencyOutput.js && node --check scripts/add-user.mjs && node --check scripts/validate-complaint-consistency.mjs",
+    "test": "node --test tests/*.test.js",
+    "build:css": "tailwindcss -i assets/tailwind-input.css -o public/tailwind.css --minify"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2",
+    "express-session": "^1.19.0",
+    "multer": "^2.2.0",
+    "playwright": "^1.45.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "overrides": {
+    "exceljs": {
+      "archiver": "^8.0.0",
+      "unzipper": "^0.12.5",
+      "uuid": "^11.1.1"
+    },
+    "ip-address": "10.5.0"
+  }
+}

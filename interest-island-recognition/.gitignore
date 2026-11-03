@@ -1,0 +1,11 @@
+node_modules/
+.browser-profile/
+logs/
+output/
+.DS_Store
+.env.local
+.pycache/
+config/qlchat-api-map.local.json
+config/chance-api-map.local.json
+.full_pipeline.lock
+.qlchat_unified_profile/

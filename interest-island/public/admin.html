@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>账号管理 · 客满运营台</title>
+    <link rel="stylesheet" href="/tailwind.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/glass-theme.css?v=20260801-1">
+  </head>
+  <body class="glass-simple-page admin-page">
+    <main class="glass-simple-shell">
+      <header class="glass-simple-header">
+        <div>
+          <h1 class="text-2xl font-semibold">账号管理</h1>
+          <p class="mt-1 text-sm text-slate-500">账号由管理员创建，不开放公众注册。</p>
+        </div>
+        <a href="/" class="glass-return px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">返回查询</a>
+      </header>
+
+      <section class="glass-card mt-5 p-4">
+        <h2 class="text-base font-semibold">新建账号</h2>
+        <form id="createForm" class="mt-3 grid gap-3 md:grid-cols-[1fr_160px_auto]">
+          <input id="newUsername" required placeholder="用户名（小写字母或数字）" class="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500">
+          <select id="newRole" class="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+          <button class="glass-primary px-4 py-2 text-sm font-medium text-white hover:brightness-105">创建账号</button>
+        </form>
+        <div id="initialPassword" class="mt-3 hidden rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"></div>
+      </section>
+
+      <section class="glass-card mt-5 overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h2 class="text-base font-semibold">用户列表</h2>
+          <button id="refresh" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50" title="刷新"><i class="fa fa-refresh"></i></button>
+        </div>
+        <div id="users" class="divide-y divide-slate-200"></div>
+      </section>
+      <p id="hint" class="mt-4 text-sm text-rose-600"></p>
+    </main>
+
+    <script>
+      let csrfToken = "";
+      let currentUsername = "";
+      init();
+
+      async function init() {
+        const sessionResponse = await fetch("/api/session", { cache: "no-store" });
+        if (sessionResponse.status === 401) return window.location.replace("/login");
+        const session = await sessionResponse.json();
+        if (session.user?.role !== "admin") return window.location.replace("/");
+        csrfToken = session.csrfToken || "";
+        currentUsername = session.user.username;
+        await loadUsers();
+      }
+
+      document.querySelector("#createForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const response = await api("/api/admin/users", {
+          method: "POST",
+          body: JSON.stringify({ username: document.querySelector("#newUsername").value.trim(), role: document.querySelector("#newRole").value })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return showError(payload.error || "创建失败");
+        const panel = document.querySelector("#initialPassword");
+        panel.classList.remove("hidden");
+        panel.innerHTML = `账号 <strong>${escapeHtml(payload.data.username)}</strong> 的一次性初始密码：<code class="ml-1 rounded bg-white px-2 py-1 font-mono">${escapeHtml(payload.initialPassword)}</code><br><span class="text-xs">请安全传递给本人，离开本页后不再展示。</span>`;
+        document.querySelector("#newUsername").value = "";
+        await loadUsers();
+      });
+
+      document.querySelector("#refresh").addEventListener("click", loadUsers);
+
+      async function loadUsers() {
+        const response = await api("/api/admin/users");
+        if (!response.ok) return showError("用户列表加载失败");
+        const payload = await response.json();
+        document.querySelector("#users").innerHTML = payload.data.map((user) => `
+          <article class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <strong>${escapeHtml(user.username)}</strong>
+                <span class="rounded-full ${user.role === "admin" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"} px-2 py-0.5 text-xs">${user.role === "admin" ? "管理员" : "普通用户"}</span>
+                ${user.disabled ? '<span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700">已禁用</span>' : ""}
+                ${user.mustChangePassword ? '<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">待修改初始密码</span>' : ""}
+              </div>
+              <p class="mt-1 text-xs text-slate-500">创建于 ${escapeHtml(formatTime(user.createdAt))}</p>
+              ${user.role === "admin" ? '<p class="mt-2 text-xs font-medium text-sky-700">管理员不受每日任务额度限制</p>' : quotaSummary(user.taskQuota)}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button data-action="toggle" data-id="${user.id}" data-disabled="${user.disabled}" ${user.username === currentUsername ? "disabled" : ""} class="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">${user.disabled ? "启用" : "禁用"}</button>
+              <button data-action="reset" data-id="${user.id}" class="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">重置密码</button>
+              <button data-action="profile" data-id="${user.id}" class="rounded-md border border-rose-200 px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50">清除兴趣岛登录态</button>
+              ${user.role === "user" ? `
+                <button data-action="grant-overview" data-id="${user.id}" data-username="${escapeHtml(user.username)}" class="rounded-md border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50">查询 +15</button>
+                <button data-action="grant-pipeline" data-id="${user.id}" data-username="${escapeHtml(user.username)}" class="rounded-md border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50">批量 +15</button>
+                <button data-action="grant-photo" data-id="${user.id}" data-username="${escapeHtml(user.username)}" class="rounded-md border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50">录单 +15</button>
+              ` : ""}
+            </div>
+          </article>
+        `).join("");
+      }
+
+      document.querySelector("#users").addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        button.disabled = true;
+        const id = button.dataset.id;
+        let response;
+        if (button.dataset.action === "toggle") {
+          response = await api(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify({ disabled: button.dataset.disabled !== "true" }) });
+        } else if (button.dataset.action === "reset") {
+          response = await api(`/api/admin/users/${id}/reset-password`, { method: "POST" });
+        } else if (button.dataset.action.startsWith("grant-")) {
+          const taskType = button.dataset.action.slice("grant-".length);
+          const label = { overview: "用户信息查询", pipeline: "敏感词批量处理", photo: "图片录单" }[taskType];
+          if (!confirm(`确认给账号“${button.dataset.username}”追加今日 ${label} 15 次额度？`)) {
+            return void (button.disabled = false);
+          }
+          response = await api(`/api/admin/users/${id}/task-quota`, {
+            method: "POST",
+            body: JSON.stringify({ taskType })
+          });
+        } else if (confirm("确认清除此账号的兴趣岛扫码登录态？下次查询需要重新扫码。")) {
+          response = await api(`/api/admin/users/${id}/profile`, { method: "DELETE" });
+        }
+        if (!response) return void (button.disabled = false);
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) showError(payload.error || "操作失败");
+        if (payload.initialPassword) {
+          const panel = document.querySelector("#initialPassword");
+          panel.classList.remove("hidden");
+          panel.innerHTML = `新的一次性密码：<code class="rounded bg-white px-2 py-1 font-mono">${escapeHtml(payload.initialPassword)}</code>`;
+        }
+        await loadUsers();
+      });
+
+      function api(url, options = {}) {
+        const headers = new Headers(options.headers || {});
+        if (options.body) headers.set("content-type", "application/json");
+        if (options.method && options.method !== "GET") headers.set("x-csrf-token", csrfToken);
+        return fetch(url, { ...options, headers });
+      }
+      function showError(message) { document.querySelector("#hint").textContent = message; }
+      function quotaSummary(taskQuota) {
+        const quotas = taskQuota?.quotas || {};
+        const item = (key, label) => {
+          const quota = quotas[key] || {};
+          return `${label} ${Number(quota.used || 0)}/${Number(quota.limit || 0)}`;
+        };
+        return `<p class="mt-2 text-xs text-slate-600">今日额度：${item("overview", "查询")} · ${item("pipeline", "批量")} · ${item("photo", "录单")}</p>`;
+      }
+      function formatTime(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
+      function escapeHtml(value) { return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
+    </script>
+  </body>
+</html>
